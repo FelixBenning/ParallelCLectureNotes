@@ -490,3 +490,26 @@ omp_set_dynamic(); //indicate that the number of threads in the upcoming paralle
 
 ## Cuda
 
+[cuda by Example](https://github.com/jiekebo/CUDA-By-Example/blob/master/common/book.h)
+
+### GPU Architecture
+
+Hardware:
+
+- Cores are grouped into **warps** (usually groups of 32)
+  - in general they all have to execute the same instruction (on different data) at any time
+  - if the warp has two **warp schedulers**, the warp can execute a 32 bit operation and a 64 bit operation at the same time.
+  - warps have one *shared register*, and *shared instruction cache* (L0)
+- Warps are grouped into **S**treaming **M**ultiprocessors (SM)
+  - every SM has one shared data and instruction cache (L1), 16-48kB, 80 cycles from L0
+- The entire GPU has one shared (L2) cache
+  - size: 2-4MB, latency: 200-300 cycles, bandwidth: 500-1000GB/s
+- The GPU also has its own RAM, **S**ynchronous **D**ynamic **R**andom **A**ccess **M**emory (SDRAM) to be precise.
+  - size: 4-12GB, latency: 200-300 cycles, bandwidth: 250-500GB/s
+
+Abstractions:
+
+- **Threads** are grouped into **Blocks** which are assigned to a SM and can not be reassigned
+- warp sized chunks of these blocks are assigned to warps inside the SM in no determined order. Blocksizes should therefore be multiples of warpsize.
+- Halting execution, switching to another block/warp, and continuing execution within an SM is very cheap.
+
