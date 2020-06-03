@@ -509,7 +509,18 @@ Hardware:
 
 Abstractions:
 
-- **Threads** are grouped into **Blocks** which are assigned to a SM and can not be reassigned
-- warp sized chunks of these blocks are assigned to warps inside the SM in no determined order. Blocksizes should therefore be multiples of warpsize.
+- **Threads** are grouped into **Blocks** which are assigned to a **S**treaming **M**ultiprocessors (SM) and can not be reassigned
+- **warp** sized (usually 32) chunks of these blocks are executed in a SIMD like fashing inside the SM in no determined order. Blocksizes should therefore be multiples of warpsize. But Cuda deals with masking in case of partially filled warps, or branching points (if, switch, etc.), ignorning this fact only costs performance
 - Halting execution, switching to another block/warp, and continuing execution within an SM is very cheap.
 
+Hardware:
+
+- SM have multiple **warp scheduler** with associated computing capability, with *shared register* and *instruction cache* (**L0**)
+
+- Memory levels:
+
+  | Level                                                        | Size     | Latency (clock cycles) | Bandwidth    |
+  | ------------------------------------------------------------ | -------- | ---------------------- | ------------ |
+  | SM level (**L1**)                                            | 16-48 kB | 80                     |              |
+  | GPU level (**L2**)                                           | 2-4 MB   | 200-300                | 500-1000GB/s |
+  | Graphic Card (**S**ynchronous **D**ynamic **R**andom **A**ccess **M**emory - SDRAM) | 4-16 GB  | 200-300                | 250-500GB/s  |
