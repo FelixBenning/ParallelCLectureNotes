@@ -167,7 +167,7 @@ Not necessary nor sufficient for the compiler to try, but less error prone than 
 
 [LMU cheatsheet](https://db.in.tum.de/~finis/x86-intrin-cheatsheet-v2.1.pdf)
 
-make sure that your computer can use these types and operations (cf. [Command line](#Command Line), Compiler Constants, Architecture flags)
+make sure that your computer can use these types and operations (cf. [Command line](#Command Line), [Compiler Constants](#constants), [Architecture flags](#architecture-flags))
 
 ```c
 #include <immintrin.h>
@@ -494,23 +494,10 @@ omp_set_dynamic(); //indicate that the number of threads in the upcoming paralle
 
 ### GPU Architecture
 
-Hardware:
-
-- Cores are grouped into **warps** (usually groups of 32)
-  - in general they all have to execute the same instruction (on different data) at any time
-  - if the warp has two **warp schedulers**, the warp can execute a 32 bit operation and a 64 bit operation at the same time.
-  - warps have one *shared register*, and *shared instruction cache* (L0)
-- Warps are grouped into **S**treaming **M**ultiprocessors (SM)
-  - every SM has one shared data and instruction cache (L1), 16-48kB, 80 cycles from L0
-- The entire GPU has one shared (L2) cache
-  - size: 2-4MB, latency: 200-300 cycles, bandwidth: 500-1000GB/s
-- The GPU also has its own RAM, **S**ynchronous **D**ynamic **R**andom **A**ccess **M**emory (SDRAM) to be precise.
-  - size: 4-12GB, latency: 200-300 cycles, bandwidth: 250-500GB/s
-
 Abstractions:
 
 - **Threads** are grouped into **Blocks** which are assigned to a **S**treaming **M**ultiprocessors (SM) and can not be reassigned
-- **warp** sized (usually 32) chunks of these blocks are executed in a SIMD like fashing inside the SM in no determined order. Blocksizes should therefore be multiples of warpsize. But Cuda deals with masking in case of partially filled warps, or branching points (if, switch, etc.), ignorning this fact only costs performance
+- **warp** sized (usually 32) chunks of these blocks are executed in a SIMD like fashing inside the SM in no determined order. Blocksizes should therefore be multiples of warpsize. But Cuda deals with masking in case of partially filled warps, or branching points (`if`, `switch`, etc.), ignorning this fact only costs performance
 - Halting execution, switching to another block/warp, and continuing execution within an SM is very cheap.
 
 Hardware:
@@ -519,8 +506,94 @@ Hardware:
 
 - Memory levels:
 
-  | Level                                                        | Size     | Latency (clock cycles) | Bandwidth    |
-  | ------------------------------------------------------------ | -------- | ---------------------- | ------------ |
-  | SM level (**L1**)                                            | 16-48 kB | 80                     |              |
-  | GPU level (**L2**)                                           | 2-4 MB   | 200-300                | 500-1000GB/s |
-  | Graphic Card (**S**ynchronous **D**ynamic **R**andom **A**ccess **M**emory - SDRAM) | 4-16 GB  | 200-300                | 250-500GB/s  |
+  | Level                    |     Size | Latency (GPU cycles) |    Bandwidth |
+  | :----------------------- | -------: | -------------------: | -----------: |
+  | SM level (**L1**)        | 16-48 kB |                   80 |              |
+  | GPU level (**L2**)       |   2-4 MB |              200-300 | 500-1000GB/s |
+  | Graphic Card (SDRAM[^1]) |  4-16 GB |              200-300 |  250-500GB/s |
+
+  [^1]: **S**ynchronous **D**ynamic **R**andom **A**ccess **M**emory
+
+### Basic Usage
+
+File endings are `.cu` (instead of `.c`,`.cc`, or `.cpp`) and it is necessary to use the Nvidia compiler `nvcc`, which delegates some tasks to a normal C compiler. So both needs to be installed.
+
+#### Decorators
+
+- `__host__` compile as normal CPU function (equivalent to no decorator)
+- `__device__` compile as GPU function
+- `__global__` compile as **kernel** (a GPU function callable by the CPU)
+
+Example:
+
+``` c
+__host__ __device__ int min(int a, int b){
+    return a<b ? a : b;
+}
+```
+
+here the compiler produces a version of `min` callable by the cpu and another version callable by the gpu.
+
+#### Data Management
+
+```c
+float* cpu_pointer = (float*) malloc(10*sizeof(float));
+//fill with data
+//========================== GPU ==============================
+float* gpu_pointer;
+cudaMalloc((void**) &gpu_pointer, 10*sizeof(float));
+
+cudaMemcpy(gpu_pointer, cpu_pointer, cudaMemcpyHostToDevice);
+//do stuff on the gpu with gpu_pointer
+cudaMemcpy(cpu_pointer, gpu_pointer, cudaMemcpyDeviceToHost);
+
+cudaFree(gpu_pointer);
+//=============================================================
+//use data from GPU
+free(cpu_pointer);
+```
+
+Example for usage of `cudaMalloc`, `cudaMemcpy`, `cudaFree`
+
+#### Calling a Kernel
+
+```c
+const BLOCKS = n;
+const BLOCKSIZE = k*32;
+
+__global__ void mult(float *gpu_a, float *gpu_b, float *gpu_c){
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i<N) gpu_c[idx] = gpu_a[idx] * gpu_b[idx];
+}
+
+int main(void) {
+    // data management providing gpu pointers gpu_a,...gpu_c
+    mult <<<BLOCKS, BLOCKSIZE>>> (gpu_a, gpu_b, gpu_c);
+    //use result gpu_c
+}
+```
+
+Calling a kernel is asynchronous and the CPU thread continuous without waiting for the result of the kernel. In order to force the CPU to wait, you could use
+
+```c
+cudaDeviceSynchronize()
+```
+
+This synchronization is actually built into `cudaMemcpy`, which is why there exists a variant called `cudaMemcpyAsync`. 
+
+Note that the calls to the GPU (kernel calls, cudaMemcpy, ...) are still in order. For concurrency of these calls see: [Streams & Events](#streams-&-events)
+
+#### Intrinsic functions
+
+[Cuda Maths API Dokumentation](https://docs.nvidia.com/cuda/cuda-math-api/index.html)
+
+*Note*: there is a difference between Single/Double Precision *Mathematical Functions* which can also be used in`__host__` code and Single/Double Precision *Intrinsics*. Using the compiler option `-use_fast_math` converts all functions to intrinsics cf. [Programming Guide Appdx E.2: Intrinsic Functions](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#intrinsic-functions). The advantage is speed, the drawback is precision and missing special case handling. It is thus advised to avoid the compiler option and explicitly convert functions where applicable.
+
+
+
+#### Streams & Events
+
+see: `cudaStream_t`, `cudaStreamCreate`
+
+and: `cudaEvent_t`, `cudaEventCreate`
+
