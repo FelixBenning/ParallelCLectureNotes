@@ -506,13 +506,13 @@ Hardware:
 
 - Memory levels:
 
-  | Level                    |     Size | Latency (GPU cycles) |    Bandwidth |
-  | :----------------------- | -------: | -------------------: | -----------: |
-  | SM level (**L1**)        | 16-48 kB |                   80 |              |
-  | GPU level (**L2**)       |   2-4 MB |              200-300 | 500-1000GB/s |
-  | Graphic Card (SDRAM[^1]) |  4-16 GB |              200-300 |  250-500GB/s |
+  | Level                |     Size | Latency (GPU cycles) |    Bandwidth |
+  | :------------------- | -------: | -------------------: | -----------: |
+  | SM level (**L1**)    | 16-48 kB |                   80 |              |
+  | GPU level (**L2**)   |   2-4 MB |              200-300 | 500-1000GB/s |
+  | Graphic Card (DRAM*) |  4-16 GB |              200-300 |  250-500GB/s |
 
-  [^1]: **S**ynchronous **D**ynamic **R**andom **A**ccess **M**emory
+  *: **D**ynamic **R**andom **A**ccess **M**emory
 
 ### Basic Usage
 
@@ -534,26 +534,30 @@ __host__ __device__ int min(int a, int b){
 
 here the compiler produces a version of `min` callable by the cpu and another version callable by the gpu.
 
-#### Data Management
+#### Managing Devices
 
-```c
-float* cpu_pointer = (float*) malloc(10*sizeof(float));
-//fill with data
-//========================== GPU ==============================
-float* gpu_pointer;
-cudaMalloc((void**) &gpu_pointer, 10*sizeof(float));
+[Cuda Device Management](https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__DEVICE.html#group__CUDART__DEVICE)
 
-cudaMemcpy(gpu_pointer, cpu_pointer, cudaMemcpyHostToDevice);
-//do stuff on the gpu with gpu_pointer
-cudaMemcpy(cpu_pointer, gpu_pointer, cudaMemcpyDeviceToHost);
+- ```c
+  int count;
+  cudaGetDeviceCount(&count);
+  ```
 
-cudaFree(gpu_pointer);
-//=============================================================
-//use data from GPU
-free(cpu_pointer);
-```
+  provides the number of Nvidia GPUs with compute capability of at least 1.0 (devices are enumerated from 0,...,n-1)
 
-Example for usage of `cudaMalloc`, `cudaMemcpy`, `cudaFree`
+- ```c
+  cudaDeviceProp prop;
+  cudaGetDeviceProperties(&prop, d_num)
+  ```
+
+  fills the [`cudaDeviceProp` struct](https://docs.nvidia.com/cuda/cuda-runtime-api/structcudaDeviceProp.html) with the properties of device `d_num`
+
+- ```c
+  __host__ __device__ cudaError_t cudaGetDevice(int *d_num);
+  __host__ cudaError_t cudaSetDevice(int d_num);
+  ```
+
+  get/set the current device context (i.e. the device which kernel calls are passed to)
 
 #### Calling a Kernel
 
@@ -573,27 +577,209 @@ int main(void) {
 }
 ```
 
-Calling a kernel is asynchronous and the CPU thread continuous without waiting for the result of the kernel. In order to force the CPU to wait, you could use
+Calling a kernel is asynchronous and the CPU thread continuous without waiting for the result of the kernel. But some of the memory management commands have synchronization built in. See [Concurrency](#concurrency) for further details.
+
+#### Data Management
+
+##### Global Memory
 
 ```c
-cudaDeviceSynchronize()
+float* cpu_pointer = (float*) malloc(10*sizeof(float));
+//fill with data
+//========================== GPU ==============================
+float* gpu_pointer;
+cudaMalloc((void**) &gpu_pointer, 10*sizeof(float));
+
+cudaMemcpy(gpu_pointer, cpu_pointer, cudaMemcpyHostToDevice);
+//do stuff on the gpu with gpu_pointer
+cudaMemcpy(cpu_pointer, gpu_pointer, cudaMemcpyDeviceToHost);
+
+cudaFree(gpu_pointer);
+//=============================================================
+//use data from GPU
+free(cpu_pointer);
 ```
 
-This synchronization is actually built into `cudaMemcpy`, which is why there exists a variant called `cudaMemcpyAsync`. 
+`cudaMalloc`, `cudaMemcpy`, `cudaFree` allocate, copy and free memory on the device DRAM. This memory is also referred to as global memory, which can be misleading as it is not shared with the CPU.
 
-Note that the calls to the GPU (kernel calls, cudaMemcpy, ...) are still in order. For concurrency of these calls see: [Streams & Events](#streams-&-events)
+It is also possible to directly access CPU RAM from the device utilizing [`cudaMallocHost`](http://developer.download.nvidia.com/compute/cuda/2_3/toolkit/docs/online/group__CUDART__MEMORY_g9f93d9600f4504e0d637ceb43c91ebad.html#g9f93d9600f4504e0d637ceb43c91ebad)
+
+##### Shared Memory
+
+[Reference 1: Cuda Succinctly](https://www.syncfusion.com/ebooks/cuda/shared-memory), [Reference 2: Nvidia Devblog](https://devblogs.nvidia.com/using-shared-memory-cuda-cc/)
+
+It is also possible to allocate Shared Memory in the L1 cache (SM wide). This memory is shared by all threads within a block. Recall: Blocks are assigned and stay with one SM.
+
+- Static Allocation
+
+  ```c
+  __global__ void kernel(){
+      __shared__ int num;
+      __shared__ float farr[10];
+  }
+  ```
+
+- Dynamic Allocation
+
+  ```c
+  __global__ void kernel(){
+      int idx = blockIdx.x * blockDim.x + threadIdx.x;
+      extern __shared__ int num[];
+      //do something with num[idx]
+  }
+  ```
+
+  ```c
+  kernel <<< blocks, blocksize, blocksize*sizeof(int)>>>()
+  ```
+
+  the third argument of the  `<<<>>>` parameters specifies the size of *the* `extern __shared__` variable. For this reason multiple, dynamically allocated arrays require a split of this one array:
+
+  ``` c
+  __global__ void kernel(int isize, int fsize){
+      extern __shared__ int arr[];
+      int *iarr = arr;
+      float *farr = (float*) arr + isize;
+  }
+  ```
+
+Due to the dual functionality of the L1 memory as cache and shared memory, it needs to be split. [`cudaFuncSetCacheConfig`](https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EXECUTION.html#group__CUDART__EXECUTION_1g6699ca1943ac2655effa0d571b2f4f15) influences the sizes of this split. 
 
 #### Intrinsic functions
 
-[Cuda Maths API Dokumentation](https://docs.nvidia.com/cuda/cuda-math-api/index.html)
+[Cuda Maths API Dokumentation](https://docs.nvidia.com/cuda/cuda-math-api/index.html) 
 
-*Note*: there is a difference between Single/Double Precision *Mathematical Functions* which can also be used in`__host__` code and Single/Double Precision *Intrinsics*. Using the compiler option `-use_fast_math` converts all functions to intrinsics cf. [Programming Guide Appdx E.2: Intrinsic Functions](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#intrinsic-functions). The advantage is speed, the drawback is precision and missing special case handling. It is thus advised to avoid the compiler option and explicitly convert functions where applicable.
+*Note*: there is a difference between Single/Double Precision *Mathematical Functions* which can also be used in`__host__` code and Single/Double Precision *Intrinsics*. 
 
+| Mathematical Function/Operation               | Intrinsics                            |
+| --------------------------------------------- | ------------------------------------- |
+| `x/y`                                         | `__fdividef(x,y)`                     |
+| `sinf(x)`, `cosf(x)`, `tanf(x)`               | `__sinf(x)`, `__cosf(x)`, `__tanf(x)` |
+| `expf(x)`, `logf(x)`, `log2f(x)`, `powf(x,y)` | `__expf(x)`, ... , `__powf(x,y)`      |
 
+Using the compiler option `-use_fast_math` converts all functions to intrinsics cf. [Programming Guide Appdx E.2: Intrinsic Functions](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#intrinsic-functions). The advantage is speed, the drawback is precision and missing special case handling. It is thus advised to avoid the compiler option and explicitly convert functions where applicable.
 
-#### Streams & Events
+### Concurrency
 
-see: `cudaStream_t`, `cudaStreamCreate`
+#### Synchronization
 
-and: `cudaEvent_t`, `cudaEventCreate`
+##### CPU/GPU Synchronization
 
+Calls to kernels are queued up in order (cf. [Concurrent Kernel Execution](#Concurrent-Kernel-Execution) for a generalization), but the CPU continuous asynchronously. In order to force the CPU to wait, you could use
+
+```c
+__host__ __device__ cudaError_t cudaDeviceSynchronize ( void );
+```
+
+This synchronization is built into `cudaMemcpy`, which is why there exists a variant called `cudaMemcpyAsync` cf. [Implicit Synchronization](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#implicit-synchronization)
+
+##### Thread Synchronization
+
+In order to synchronize threads in a block, it is possible to introduce a barrier with
+
+``` c
+__syncthreads()
+```
+
+Useful when dealing with shared memory. Although Atomics might be more suited for this purpose.
+
+#### Atomics
+
+[Atomic Functions Documentation](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#atomic-functions) An operation "is atomic in the sense that it is guaranteed to be performed without interference from other threads." Atomic operations usually read a certain memory location, perform an operation, store the result at the memory location and return the old value. Examples:
+
+- ```c
+  int atomicAdd(int* address, int val);
+  ```
+
+  also `unsigned int`, `float`,`double`, similarly: `atomicSub`
+
+- ```c
+  int atomic Exch(int* address, int val);
+  ```
+
+  returns the value at address and stores val into the address
+
+- ```c
+  int atomicMin(int* address, int val);
+  ```
+
+  similarly `atomicMax`
+
+#### Concurrent Kernel Execution
+
+[Stream&Concurrency Webinar](https://developer.download.nvidia.com/CUDA/training/StreamsAndConcurrencyWebinar.pdf), [Nvidia Documentation](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#asynchronous-concurrent-execution)
+
+##### [Streams](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#streams)
+
+see [Stream Management API](https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__STREAM.html)
+
+If not further specified, kernel calls are queued up in the [Default Stream](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#default-stream), it is possible to create different queues (streams), which can execute concurrently:
+
+```c
+cudaStream_t stream[2];
+cudaStreamCreate(&stream[0]);
+cudaStreamCreate(&stream[1]);
+
+kernel <<< blocks, blocksize, shared_mem_size, &stream[0]>>> ();
+kernel <<< blocks, blocksize, shared_mem_size, &stream[1]>>> (); 
+```
+
+Such a stream also needs to be provided to [`cudaMemcpyAsync`](http://developer.download.nvidia.com/compute/cuda/2_3/toolkit/docs/online/group__CUDART__MEMORY_ge4366f68c6fa8c85141448f187d2aa13.html). 
+
+*Warning*: Assigning a kernel call to the default stream either implicitly or by passing `0` or `NULL`  blocks ALL following kernel calls from executing before this call is finished, even calls to other streams. 
+
+It is also possible to synchronize the CPU with a certain GPU stream:
+
+```c
+__host__ cudaError_t cudaStreamSynchronize(cudaStream_t stream)
+```
+
+##### [Events](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#events)
+
+see [Event Management API](https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EVENT.html#group__CUDART__EVENT)
+
+It is possible to create event objects:
+
+```c
+__host__ cudaError_t cudaEventCreate ( cudaEvent_t* event );
+__host__  __device__ cudaError_t cudaEventDestroy ( cudaEvent_t event );
+```
+
+which can then be used to record events:
+
+```c
+__host__  __device__ cudaError_t cudaEventRecord (cudaEvent_t event, cudaStream_t stream = 0 );
+```
+
+Recording an event for `stream1` means, the event is put into the `stream1` queue, and is completed as soon as the tasks in front of the event complete. The completions is also saved as a time stamp which enables the use of events for 
+
+```c
+__host__ cudaError_t cudaEventElapsedTime ( float* ms, cudaEvent_t start, cudaEvent_t end )
+```
+
+but events can also be used for synchronization of the CPU
+
+```c
+__host__ cudaError_t cudaEventSynchronize ( cudaEvent_t event )
+```
+
+which blocks until this event is completed, or for synchronization between streams:
+
+```c
+__host__  __device__ cudaError_t cudaStreamWaitEvent ( cudaStream_t stream, cudaEvent_t event, unsigned int  flags ) 
+```
+
+this queues a barrier into `stream`, which clears as soon as `event` completes. 
+
+###### Example:
+
+```c 
+cudaEvent_t event1;
+cudaEventCreate(event1);
+myKernel <<< b, bs, sh_mem, stream1>>> (); //queuePos#1 in stream1
+cudaEventRecord(event1, stream1); //queuePos#2 in stream1
+cudaStreamWaitEvent(stream2, event1, 0); //queuePos#1 in stream2
+myKernel2<<<b,bs,sh_mem, stream2>>>(); //queuePos#2 in stream2
+```
+
+`myKernel2` is executed if the `queuePos#1` clears in front of it. This only happens if `event1` is completed. Which requires `queuePos#1` of `stream1` to clear such that the `event1` at `queuePos#2` is completed.
