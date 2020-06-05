@@ -192,6 +192,9 @@ might cause unexplained crashes due to memory alignment problems. Necessary:
 type_address%sizeof(type)==0 //address is in bytes, sizeof returns bytes!
 ```
 
+"The reader may be wondering how an unaligned operand could occur if the data was explicitly aligned; however, this does occasionally happen, typically with compiler variable attributes. The author has experience with compilers completely ignoring a variable’s alignment attribute, resulting in a fault (Cryil, 2012)."
+
+https://www.sciencedirect.com/topics/computer-science/alignment-requirement
 #### Functions
 
 `_mm[bits]_fct_name`
