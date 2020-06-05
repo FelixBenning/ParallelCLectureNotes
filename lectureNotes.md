@@ -9,6 +9,7 @@
 # Compiler
 
 ## Precompiler
+https://gcc.gnu.org/onlinedocs/cpp/Macros.html#Macros
 
 Macros are expanded before substitution (only one substitution per Macro)
 
@@ -64,6 +65,8 @@ printf(stderr, format __VA_OPT__(,) __VA_ARGS__)
   - `#if UNDEFINED_VAR > 0` undefined equation evaluate to false
 
 ## Constants
+Useful predefined macros:
+https://gcc.gnu.org/onlinedocs/cpp/Standard-Predefined-Macros.html#Standard-Predefined-Macros
 
 - `__cplusplus` is C++ compilation?
 - `__FILE__`, `__LINE__`
@@ -116,6 +119,7 @@ cf. [gcc x86 Options](https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html)
 
 - `-std=c11` use C standard C11 (published in 2011)
 - `-O0`, ..., `-O3` optimization level (`-O3` is aggressive)
+- `-funroll-loops` might provide speed up in certain situations and is not included in `-O3`
 - `-g0`(default), `g1`, `-g`, `-g3` levels of debugging/symbol information retained (e.g. variable names), for use in a debugger
 - `-Dname` predefine `name` as a macro with definition 1 
   - `-DNDEBUG` disable assertions (i.e. `#define NDEBUG 1` )
@@ -188,6 +192,9 @@ might cause unexplained crashes due to memory alignment problems. Necessary:
 type_address%sizeof(type)==0 //address is in bytes, sizeof returns bytes!
 ```
 
+"The reader may be wondering how an unaligned operand could occur if the data was explicitly aligned; however, this does occasionally happen, typically with compiler variable attributes. The author has experience with compilers completely ignoring a variable’s alignment attribute, resulting in a fault (Cryil, 2012)."
+
+https://www.sciencedirect.com/topics/computer-science/alignment-requirement
 #### Functions
 
 `_mm[bits]_fct_name`
