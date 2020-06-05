@@ -119,6 +119,7 @@ cf. [gcc x86 Options](https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html)
 
 - `-std=c11` use C standard C11 (published in 2011)
 - `-O0`, ..., `-O3` optimization level (`-O3` is aggressive)
+- `-funroll-loops` might provide speed up in certain situations and is not included in `-O3`
 - `-g0`(default), `g1`, `-g`, `-g3` levels of debugging/symbol information retained (e.g. variable names), for use in a debugger
 - `-Dname` predefine `name` as a macro with definition 1 
   - `-DNDEBUG` disable assertions (i.e. `#define NDEBUG 1` )
