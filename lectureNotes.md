@@ -9,6 +9,7 @@
 # Compiler
 
 ## Precompiler
+https://gcc.gnu.org/onlinedocs/cpp/Macros.html#Macros
 
 Macros are expanded before substitution (only one substitution per Macro)
 
