@@ -64,6 +64,8 @@ printf(stderr, format __VA_OPT__(,) __VA_ARGS__)
   - `#if UNDEFINED_VAR > 0` undefined equation evaluate to false
 
 ## Constants
+Useful predefined macros:
+https://gcc.gnu.org/onlinedocs/cpp/Standard-Predefined-Macros.html#Standard-Predefined-Macros
 
 - `__cplusplus` is C++ compilation?
 - `__FILE__`, `__LINE__`
