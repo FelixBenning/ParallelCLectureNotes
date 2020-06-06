@@ -100,6 +100,7 @@ Also cf. [gcc Warning Options](https://gcc.gnu.org/onlinedocs/gcc/Warning-Option
 - `-Wextra` (alias `-W`) : additional warnings
 - `-pedantic` : ISO C vs ISO C++ problems
 - `-Wshadow ` : local variable has same name as global
+- `-Winline` : warns when a function marked inline could not be substituted, and gives the reason for the failure
 
 #### Architecture flags
 
