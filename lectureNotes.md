@@ -794,39 +794,47 @@ myKernel2<<<b,bs,sh_mem, stream2>>>(); //queuePos#2 in stream2
 
 ## General Advice
 
-- **Local Variables**: If Variables are as local as possible they can be optimized by the compiler to become temporary cache/register entries. This removes a lot of costly memory allocation.
+### Local Variables
 
-- **Array of Structs vs Struct of Arrays**: 
+If Variables are as local as possible they can be optimized by the compiler to become temporary cache/register entries. This removes a lot of costly memory allocation.
 
-  - CPUs fetch adjacent memory entries, which means that arrays of structs can make sense, if the entire struct is used, every time it is fetched from memory. If the first entry of every struct in the array is used, it might make sense to reformat it into a struct of arrays. Which means that the n-th entries of adjacent structs are adjacent.
+### Array of Structs vs Struct of Arrays
 
-  - Since GPUs execute every step as a warp of threads, not even immediate usage of all entries of a struct justify an array of structs. Imagine:
+- CPUs fetch adjacent memory entries, which means that arrays of structs can make sense, if the entire struct is used, every time it is fetched from memory. If the first entry of every struct in the array is used, it might make sense to reformat it into a struct of arrays. Which means that the n-th entries of adjacent structs are adjacent.
 
-    ``` c
-    struct twoElmts {int first; int second;};
-    
-    __global__ myKernel(struct twoElmts* ptr){
-        int idx = blockIdx.x * blockDim.x + threadIdx.x;
-        int myElmt1 = ptr[idx].first; // 1) 
-        int myElmt2 = ptr[idx].second; // 2)
-    }
-    ```
-
-    An array of `twoElmts` structs, is an alternating list of first and second elements. At `1)`, every thread in the warp, needs the first element. Thus 32 *even* elements of the list have to be fetched. At `2)` 32 *odd* elements of the list are fetched. As a result a continuous stretch of 64 integer sized memory is fetched *twice*. 
-
-- **Inline Functions**: If you are starting to section parts of your code with comments, explaining what these sections do, then these sections probably should be functions. Functions can be given descriptive names which can essentially act as a section title. This "collapses" the sections to a table of contents, where the "headings" (i.e. function names) can be further inspected by reading the function definition.  If you are worried that these function calls might have an impact on performance, you can give the compiler a hint (`inline`), that it might be desirable, if the function definition is simply copied in place of the function call.
-
-- **Only use Macros if absolutely necessary**: Precompiler Macros are incredible powerful as it literally allows you to procedurally write code. For this very same reason its use should be avoided, since it also allows you to horribly break things. People like to joke about things like
+- Since GPUs execute every step as a warp of threads, not even immediate usage of all entries of a struct justify an array of structs. Imagine:
 
   ``` c
-  #define false true
-  #define if while
-  ...
+  struct twoElmts {int first; int second;};
+  
+  __global__ myKernel(struct twoElmts* ptr){
+      int idx = blockIdx.x * blockDim.x + threadIdx.x;
+      int myElmt1 = ptr[idx].first; // 1) 
+      int myElmt2 = ptr[idx].second; // 2)
+  }
   ```
 
-  and while these might seem extreme. The precompiler can help you write code which is incredibly difficult to read and debug.
+  An array of `twoElmts` structs, is an alternating list of first and second elements. At `1)`, every thread in the warp, needs the first element. Thus 32 *even* elements of the list have to be fetched. At `2)` 32 *odd* elements of the list are fetched. As a result a continuous stretch of 64 integer sized memory is fetched *twice*. 
 
-  Consider for example:
+### Inline Functions
+
+If you are starting to section parts of your code with comments, explaining what these sections do, then these sections probably should be functions. Functions can be given descriptive names which can essentially act as a section title. This "collapses" the sections to a table of contents, where the "headings" (i.e. function names) can be further inspected by reading the function definition.  If you are worried that these function calls might have an impact on performance, you can give the compiler a hint (`inline`), that it might be desirable, if the function definition is simply copied in place of the function call.
+
+### Only use Macros if absolutely necessary
+
+Precompiler Macros are incredible powerful as it literally allows you to procedurally write code. For this very same reason its use should be avoided, since it also allows you to horribly break things. People like to joke about things like
+
+``` c
+#define false true
+#define if while
+...
+```
+
+and while these might seem extreme. The precompiler can help you write code which is incredibly difficult to read and debug.
+
+Examples:
+
+- `#define` for constants
 
   ```c
   #define THREADS pow(2,7)
@@ -838,7 +846,7 @@ myKernel2<<<b,bs,sh_mem, stream2>>>(); //queuePos#2 in stream2
 
   But in this case, the use of macros was never warranted
 
-  ``` c
+  ```c
   const int THREADS = pow(2,7);
   const int THREADS_PER_BLOCK = 100;
   inline int round_up_div(int a, int b){
@@ -847,6 +855,26 @@ myKernel2<<<b,bs,sh_mem, stream2>>>(); //queuePos#2 in stream2
   const int BLOCKS = round_up_div(THREADS, THREADS_PER_BLOCK);
   ```
 
-  would have provided the same functionality with type checking. While user defined functions might prevent [Constant Folding](https://en.wikipedia.org/wiki/Constant_folding), (in constrast to intinsic functions like `pow`), this  feature could be regained using `pure`/`const` [function attributes](https://stackoverflow.com/questions/2798188/pure-const-function-attributes-in-different-compilers)
+  would have provided the same functionality with type checking. While user defined functions might prevent [Constant Folding](https://en.wikipedia.org/wiki/Constant_folding), (in constrast to intinsic functions like `pow`), this  feature could be regained using `pure`/`const` [function attributes](https://stackoverflow.com/questions/2798188/pure-const-function-attributes-in-different-compilers) or (most likely) by `inline`.
 
-  Of course there are certain things like the use of `__LINE__` or `__FILE__` for debugging, which require the use of macros.
+- Configurable types:
+
+  ```c
+  #if defined USE_DOUBLE
+  #define REAL double
+  #else
+  #define REAL float
+  #endif
+  ```
+
+  can also be implemented with
+
+  ```c
+  #if defined USE_DOUBLE
+  typedef double REAL;
+  #else
+  typedef float REAL;
+  #endif
+  ```
+
+Of course there are certain things like the use of `__LINE__` or `__FILE__` for debugging, which require the use of macros.
