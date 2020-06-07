@@ -64,7 +64,8 @@ printf(stderr, format __VA_OPT__(,) __VA_ARGS__)
   - `#if defined` (alias `#ifdef`), `#if !defined` (alias `#ifndef`)
   - `#if UNDEFINED_VAR > 0` undefined equation evaluate to false
 
-## Constants
+## Predefined Macros
+
 Useful predefined macros:
 https://gcc.gnu.org/onlinedocs/cpp/Standard-Predefined-Macros.html#Standard-Predefined-Macros
 
@@ -162,7 +163,7 @@ Not necessary nor sufficient for the compiler to try, but less error prone than 
 
 [LMU cheatsheet](https://db.in.tum.de/~finis/x86-intrin-cheatsheet-v2.1.pdf)
 
-make sure that your computer can use these types and operations (cf. [Command line](#Command Line), [Compiler Constants](#constants), [Architecture flags](#architecture-flags))
+make sure that your computer can use these types and operations (cf. [Command line](#Command Line), [Predefined Macros](#predefined-macros), [Architecture flags](#architecture-flags))
 
 ```c
 #include <immintrin.h>
@@ -855,7 +856,7 @@ Examples:
   const int BLOCKS = round_up_div(THREADS, THREADS_PER_BLOCK);
   ```
 
-  would have provided the same functionality with type checking. While user defined functions might prevent [Constant Folding](https://en.wikipedia.org/wiki/Constant_folding), (in constrast to intinsic functions like `pow`), this  feature could be regained using `pure`/`const` [function attributes](https://stackoverflow.com/questions/2798188/pure-const-function-attributes-in-different-compilers) or (most likely) by `inline`.
+  would have provided the same functionality with type checking. While user defined functions might prevent [Constant Folding](https://en.wikipedia.org/wiki/Constant_folding), (in contrast to intrinsic functions like `pow`), this  feature could be regained using `pure`/`const` [function attributes](https://stackoverflow.com/questions/2798188/pure-const-function-attributes-in-different-compilers) or (most likely) by `inline`.
 
 - Configurable types:
 
