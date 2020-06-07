@@ -100,6 +100,7 @@ Also cf. [gcc Warning Options](https://gcc.gnu.org/onlinedocs/gcc/Warning-Option
 - `-Wextra` (alias `-W`) : additional warnings
 - `-pedantic` : ISO C vs ISO C++ problems
 - `-Wshadow ` : local variable has same name as global
+- `-Winline` : warns when a function marked inline could not be substituted, and gives the reason for the failure
 
 #### Architecture flags
 
@@ -193,6 +194,12 @@ type_address%sizeof(type)==0 //address is in bytes, sizeof returns bytes!
 ```
 
 "The reader may be wondering how an unaligned operand could occur if the data was explicitly aligned; however, this does occasionally happen, typically with compiler variable attributes. The author has experience with compilers completely ignoring a variable’s alignment attribute, resulting in a fault (Cryil, 2012)."
+
+On (modern) GPUs, misaligned memory accesses doesn't result in huge performance penalties:
+"Devices of compute capability 2.0, such as the Tesla C2050, have an L1 cache in each multiprocessor with a 128-byte line size. The device coalesces accesses by threads in a warp into as few cache lines as possible, resulting in negligible effect of alignment on throughput for sequential memory accesses across threads."
+
+https://devblogs.nvidia.com/how-access-global-memory-efficiently-cuda-c-kernels/#:~:text=Misaligned%20Data%20Accesses&text=Arrays%20allocated%20in%20device%20memory,are%20aligned%20to%20their%20size.
+
 
 https://www.sciencedirect.com/topics/computer-science/alignment-requirement
 #### Functions
