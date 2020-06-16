@@ -650,7 +650,7 @@ It is also possible to allocate Shared Memory in the L1 cache (SM wide). This me
 
 Due to the dual functionality of the L1 memory as cache and shared memory, it needs to be split. [`cudaFuncSetCacheConfig`](https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EXECUTION.html#group__CUDART__EXECUTION_1g6699ca1943ac2655effa0d571b2f4f15) influences the sizes of this split. 
 
-#### Intrinsic functions
+### Intrinsic functions
 
 [Cuda Maths API Dokumentation](https://docs.nvidia.com/cuda/cuda-math-api/index.html) 
 
@@ -821,7 +821,7 @@ If Variables are as local as possible they can be optimized by the compiler to b
 
 If you are starting to section parts of your code with comments, explaining what these sections do, then these sections probably should be functions. Functions can be given descriptive names which can essentially act as a section title. This "collapses" the sections to a table of contents, where the "headings" (i.e. function names) can be further inspected by reading the function definition.  If you are worried that these function calls might have an impact on performance, you can give the compiler a hint (`inline`), that it might be desirable, if the function definition is simply copied in place of the function call.
 
-### Only use Macros if absolutely necessary
+### Only use Macros if necessary
 
 Precompiler Macros are incredible powerful as it literally allows you to procedurally write code. For this very same reason its use should be avoided, since it also allows you to horribly break things. People like to joke about things like
 
@@ -879,3 +879,40 @@ Examples:
   ```
 
 Of course there are certain things like the use of `__LINE__` or `__FILE__` for debugging, which require the use of macros.
+
+### SIMD, OMP or Cuda?
+
+#### Cost of Memory Operations
+
+In order to use cuda, one needs to move data from CPU RAM to GPU RAM. Only then the calculation can start, and afterwards this operation has to be reversed. This is expensive. In fact we incur a fixed cost of complexity $O(n)$. It is fair to assume, that memory access is more expensive than any CPU operations and in order to move it to the device and back, we incur roughly two times this cost. So any $O(n)$ algorithm with small constant (i.e. only a couple operations on every element) will bottleneck on memory and not computation. Which means that it is undesirable to use Cuda because the CPU will need less than half as many memory operations.
+
+In contrast may computations per memory operation, e.g.
+
+- $O(n^m)$ complexity with $m>1$, like matrix multiplication
+- or simply a large constant like many random variables per seed, utilized within the GPU instead of exported to the CPU (e.g for a max distribution)
+
+generally favor the GPU, if operations are reasonably independent/parallelizable.
+
+#### SIMD vs OMP
+
+Often times SIMD and OMP are not mutually exclusive. But there are cases, where one or the other is less beneficial.
+
+Examples
+
+- Long independent calculations:
+  $$
+  r_i = a_i*b_i +c_i/d_i -f_i
+  $$
+  There is no reason not to use OMP here, but it lends itself perfectly for SIMD and since the calculation is relatively long, the compiler might not recognize that this can be vectorized. But loop unrolling would probably already be enough.
+
+- Alignment Problems:
+  $$
+  r_i = a_{i+1} *a_i +b_i
+  $$
+  This memory alignment problem, makes SIMD more difficult. Although it is probably still possible using unaligned loads.
+
+- Surprising "Coincidences":
+  $$
+  (r_i,...,r_{i+7}) = ((r_{i-8}/r_{i-16})\text{mod 5},...,(r_{i-1}/r_{i-9})\text{mod} 5)
+  $$
+  
