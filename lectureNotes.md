@@ -1,3 +1,5 @@
+Lecture notes by Felix Benning ([github repo](https://github.com/FelixBenning/ParallelCLectureNotes/blob/master/lectureNotes.md)) including contributions from Alex Freudenberg
+
 # Command line
 
 - `lscpu` information about `native` CPU flags
